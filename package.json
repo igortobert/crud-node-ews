@@ -1,0 +1,13 @@
+{
+  "name": "crud-node-ews",
+  "version": "0.1.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "node-ews": "^3.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^10.12.18",
+    "typescript": "^3.2.4"
+  }
+}
