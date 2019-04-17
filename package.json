@@ -4,10 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "moment": "^2.24.0",
     "node-ews": "^3.2.4"
   },
   "devDependencies": {
-    "@types/node": "^10.12.18",
-    "typescript": "^3.2.4"
+    "@types/node": "^11.13.4",
+    "typescript": "^3.4.3"
   }
 }

@@ -3,16 +3,8 @@ import { isArray } from "util";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import EWS from 'node-ews';
 
-const URL = "https://192.168.87.29"
-const credentials = {
-  userName: "test_user",
-  password: "Qwerty123456789"
-}
-
-
-
 export class Calendar {
-  protected HandlerEWS
+  protected HandlerEWS: EWS
   constructor(
     private readonly HOST: string,
     private readonly USER: string,
@@ -72,22 +64,25 @@ export class Calendar {
     }
 
     try {
-
       const result = await this.HandlerEWS.run('FindItem', ewsArgs)
-      let calendarItems: any = result.ResponseMessages.FindItemResponseMessage.RootFolder.Items.CalendarItem
-      if (!isArray(calendarItems)) calendarItems = [calendarItems]
-      calendarItems.length ? calendarItems = calendarItems : calendarItems = []
-      return calendarItems
+      if (result.ResponseMessages.FindItemResponseMessage.RootFolder.Items) {
+        let calendarItems: any = result.ResponseMessages.FindItemResponseMessage.RootFolder.Items.CalendarItem
+        if (!isArray(calendarItems)) calendarItems = [calendarItems]
+        calendarItems.length ? calendarItems = calendarItems : calendarItems = []
+        return calendarItems
+      } else {
+        return []
+      }
 
     } catch (error) {
       return error
     }
   }
 
-  async create(meeting: CreateMeeting): Promise<Attributes> {
+  async create(meeting: Meeting, attendee?: string[]): Promise<Attributes> {
     const ewsArgs = {
       attributes: {
-        SendMeetingInvitations: 'SendToNone'
+        SendMeetingInvitations: attendee && attendee.length ? 'SendToAllAndSaveCopy' : 'SendToAllAndSaveCopy'
       },
       Items: {
         CalendarItem: {
@@ -98,23 +93,55 @@ export class Calendar {
             },
             "$value": meeting.Body
           },
-          ReminderMinutesBeforeStart: meeting.ReminderMinutes.toString(),
+          ReminderMinutesBeforeStart: meeting.ReminderMinutes ? meeting.ReminderMinutes.toString() : '0',
           Start: meeting.Start,
           End: meeting.End,
-          Location: meeting.Location
+          Location: meeting.Location,
+          RequiredAttendees: {
+            Attendee: attendee && attendee.length ? attendee.map(v => ({ Mailbox: { EmailAddress: v } })) : []
+          }
         }
       }
     }
 
     try {
       const resp = await this.HandlerEWS.run('CreateItem', ewsArgs)
-      return resp.ResponseMessages.CreateItemResponseMessage.Items.CalendarItem.ItemId
+      return resp.ResponseMessages.CreateItemResponseMessage.Items.CalendarItem.ItemId.attributes
     } catch (err) {
       return err.message;
     }
   }
+  // async create(meeting: Meeting): Promise<Attributes> {
+  //   const ewsArgs = {
+  //     attributes: {
+  //       SendMeetingInvitations: 'SendToNone'
+  //     },
+  //     Items: {
+  //       CalendarItem: {
+  //         Subject: meeting.Subject,
+  //         Body: {
+  //           attributes: {
+  //             BodyType: "HTML"
+  //           },
+  //           "$value": meeting.Body
+  //         },
+  //         ReminderMinutesBeforeStart: meeting.ReminderMinutes ? meeting.ReminderMinutes.toString() : '0',
+  //         Start: meeting.Start,
+  //         End: meeting.End,
+  //         Location: meeting.Location
+  //       }
+  //     }
+  //   }
 
-  async update(attributes: Attributes, meeting: CreateMeeting) {
+  //   try {
+  //     const resp = await this.HandlerEWS.run('CreateItem', ewsArgs)
+  //     return resp.ResponseMessages.CreateItemResponseMessage.Items.CalendarItem.ItemId.attributes
+  //   } catch (err) {
+  //     return err.message;
+  //   }
+  // }
+
+  async update(attributes: Attributes, meeting: Meeting) {
     let ewsArgs: any = {
       attributes: {
         MessageDisposition: 'SaveOnly',
@@ -132,21 +159,28 @@ export class Calendar {
         }
       }
     }
-    let agrsArray: any = []
-    if (meeting.Subject) {
-      let subject = {
-        FieldURI: { attributes: { FieldURI: 'item:Subject' } },
-        CalendarItem: { Subject: meeting.Subject }
+    let agrsArray: SetItemField[] = []
+    for (let k in meeting) {
+      let obj: SetItemField = null
+      if (meeting[k].length) {
+        switch (k) {
+          case 'Subject':
+            obj = {
+              FieldURI: { attributes: { FieldURI: `item:${k}` } },
+              CalendarItem: { [k]: meeting[k] }
+            }
+            break;
+          case 'Start':
+          case 'End':
+          case 'Location':
+            obj = {
+              FieldURI: { attributes: { FieldURI: `calendar:${k}` } },
+              CalendarItem: { [k]: meeting[k] }
+            }
+            break;
+        }
+        if (obj && Object.keys(obj).length) agrsArray.push(obj)
       }
-      agrsArray.push(subject)
-    }
-
-    if (meeting.Location) {
-      let location = {
-        FieldURI: { attributes: { FieldURI: 'calendar:Location' } },
-        CalendarItem: { Location: meeting.Location }
-      }
-      agrsArray.push(location)
     }
 
     ewsArgs.ItemChanges.ItemChange.Updates.SetItemField = agrsArray
@@ -163,7 +197,7 @@ export class Calendar {
   async delete(attributes: Attributes): Promise<string> {
     const ewsArgs = {
       attributes: {
-        DeleteType: 'HardDelete',
+        DeleteType: 'MoveToDeletedItems',
         SendMeetingCancellations: 'SendToAllAndSaveCopy'
       },
       ItemIds: {
@@ -182,13 +216,13 @@ export class Calendar {
   }
 }
 
-export interface CreateMeeting {
-  Subject: string
-  Body: string
-  ReminderMinutes: number
-  Start: string
-  End: string
-  Location: string
+export interface Meeting {
+  Subject?: string
+  Body?: string
+  ReminderMinutes?: number
+  Start?: string
+  End?: string
+  Location?: string
 }
 
 export interface Attributes {
@@ -196,7 +230,14 @@ export interface Attributes {
   ChangeKey: string
 }
 
-
+interface SetItemField {
+  FieldURI: {
+    attributes: {
+      FieldURI: string
+    }
+  }
+  CalendarItem: Meeting
+}
 
 
 
