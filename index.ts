@@ -1,5 +1,3 @@
-import { isArray } from "util";
-
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import EWS from 'node-ews';
 
@@ -67,7 +65,7 @@ export class Calendar {
       const result = await this.HandlerEWS.run('FindItem', ewsArgs)
       if (result.ResponseMessages.FindItemResponseMessage.RootFolder.Items) {
         let calendarItems: any = result.ResponseMessages.FindItemResponseMessage.RootFolder.Items.CalendarItem
-        if (!isArray(calendarItems)) calendarItems = [calendarItems]
+        if (!Array.isArray(calendarItems)) calendarItems = [calendarItems]
         calendarItems.length ? calendarItems = calendarItems : calendarItems = []
         return calendarItems
       } else {
@@ -82,7 +80,7 @@ export class Calendar {
   async create(meeting: Meeting, attendee?: string[]): Promise<Attributes> {
     const ewsArgs = {
       attributes: {
-        SendMeetingInvitations: attendee && attendee.length ? 'SendToAllAndSaveCopy' : 'SendToAllAndSaveCopy'
+        SendMeetingInvitations: attendee && attendee.length ? 'SendToAllAndSaveCopy' : 'SendToNone'
       },
       Items: {
         CalendarItem: {
@@ -146,7 +144,7 @@ export class Calendar {
       attributes: {
         MessageDisposition: 'SaveOnly',
         ConflictResolution: 'AlwaysOverwrite',
-        SendMeetingInvitationsOrCancellations: 'SendToNone'
+        SendMeetingInvitationsOrCancellations: 'SendToAllAndSaveCopy'
       },
       ItemChanges: {
         ItemChange: {
