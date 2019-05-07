@@ -109,35 +109,6 @@ export class Calendar {
       return err.message;
     }
   }
-  // async create(meeting: Meeting): Promise<Attributes> {
-  //   const ewsArgs = {
-  //     attributes: {
-  //       SendMeetingInvitations: 'SendToNone'
-  //     },
-  //     Items: {
-  //       CalendarItem: {
-  //         Subject: meeting.Subject,
-  //         Body: {
-  //           attributes: {
-  //             BodyType: "HTML"
-  //           },
-  //           "$value": meeting.Body
-  //         },
-  //         ReminderMinutesBeforeStart: meeting.ReminderMinutes ? meeting.ReminderMinutes.toString() : '0',
-  //         Start: meeting.Start,
-  //         End: meeting.End,
-  //         Location: meeting.Location
-  //       }
-  //     }
-  //   }
-
-  //   try {
-  //     const resp = await this.HandlerEWS.run('CreateItem', ewsArgs)
-  //     return resp.ResponseMessages.CreateItemResponseMessage.Items.CalendarItem.ItemId.attributes
-  //   } catch (err) {
-  //     return err.message;
-  //   }
-  // }
 
   async update(attributes: Attributes, meeting: Meeting) {
     let ewsArgs: any = {
@@ -176,6 +147,14 @@ export class Calendar {
               CalendarItem: { [k]: meeting[k] }
             }
             break;
+          case 'Resources':
+            obj = {
+              FieldURI: { attributes: { FieldURI: `calendar:${k}` } },
+              CalendarItem: {
+                [k]: { Attendee: { Mailbox: { EmailAddress: meeting[k] } } }
+              }
+            }
+            break;
         }
         if (obj && Object.keys(obj).length) agrsArray.push(obj)
       }
@@ -212,6 +191,68 @@ export class Calendar {
       return err.message;
     }
   }
+
+  async getSyncIds(MaxChangesReturned: number, SyncState?: string) {
+    const ewsArgs = {
+      ItemShape: {
+        BaseShape: 'AllProperties' //'IdOnly'
+      },
+      SyncFolderId: {
+        DistinguishedFolderId: {
+          attributes: {
+            Id: 'calendar'
+          }
+        }
+      },
+      MaxChangesReturned,
+      SyncState,
+      SyncScope: 'NormalItems',
+    }
+
+    try {
+      let result = await this.HandlerEWS.run('SyncFolderItems', ewsArgs)
+      console.log(JSON.stringify(result))
+      let syncState = result.ResponseMessages.SyncFolderItemsResponseMessage.SyncState
+      console.log('syncState =================')
+      console.log(syncState)
+      if (result.ResponseMessages.SyncFolderItemsResponseMessage.Changes) {
+        const Changes = result.ResponseMessages.SyncFolderItemsResponseMessage.Changes
+        if (Changes.Create) {
+          let create = Changes.Create
+          console.log('create =================')
+          for (let c of create) {
+            let attr = c.CalendarItem
+            console.log(attr)
+          }
+        }
+
+        if (Changes.Update) {
+          let update = Changes.Update
+          console.log('update =================')
+          for (let u of update) {
+            let attr = u.CalendarItem
+            console.log(attr)
+          }
+        }
+
+
+      }
+
+      // console.log(JSON.stringify(result))
+      // if (result.ResponseMessages.FindItemResponseMessage.RootFolder.Items) {
+      //   let calendarItems: any = result.ResponseMessages.FindItemResponseMessage.RootFolder.Items.CalendarItem
+      //   if (!Array.isArray(calendarItems)) calendarItems = [calendarItems]
+      //   calendarItems.length ? calendarItems = calendarItems : calendarItems = []
+      //   return calendarItems
+      // } else {
+      //   return []
+      // }
+
+    } catch (error) {
+      console.log(JSON.stringify(error))
+      return error
+    }
+  }
 }
 
 export interface Meeting {
@@ -221,6 +262,7 @@ export interface Meeting {
   Start?: string
   End?: string
   Location?: string
+  Resources?: any
 }
 
 export interface Attributes {
